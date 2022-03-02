@@ -10,4 +10,6 @@ public class SecurityController {
     public String index() {
         return "home";
     }
+
+
 }
