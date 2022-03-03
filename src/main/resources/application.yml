@@ -15,7 +15,7 @@ spring:
 
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
-    url: jdbc:mariadb://localhost:3307/village
+    url: jdbc:mariadb://localhost:3307/spring_security
     username: admin
     password: password
 
