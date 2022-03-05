@@ -1,4 +1,4 @@
-package io.security.basic_security;
+package io.security.basic_security.theory;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
