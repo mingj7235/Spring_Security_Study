@@ -2,6 +2,7 @@ package io.security.basic_security.theory;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -10,10 +11,15 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.logout.LogoutHandler;
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
+import org.springframework.security.web.savedrequest.RequestCache;
+import org.springframework.security.web.savedrequest.SavedRequest;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -31,6 +37,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
     //메모리로 사용자를 임의로 생성하는 방법 (테스트용)
     @Override
     protected void configure(final AuthenticationManagerBuilder auth) throws Exception {
+
         // password : {noop}은 인코더할 때 프리픽스로 어떻게 할 것인지 패스워드 알고리즘에 보내는 것임. 유형을 적어줘야한다.
         // {noop}은 아무런 인코더를 안쓰고 변화가 없다는 의미임
         auth.inMemoryAuthentication().withUser("user").password("{noop}1111").roles("USER");
@@ -43,15 +50,25 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
         //인가 정책 설정
         http
                 .authorizeRequests()
-                        .antMatchers("/user").hasRole("USER")
-                        .antMatchers("/admin/pay").hasRole("ADMIN")
-                        .antMatchers("/admin/**").access("hasRole('ADMIN') or hasRole('SYS')") //spEl 사용
-                        .anyRequest().authenticated();
+                    .antMatchers("/login").permitAll() // 인증 받지 않아도 들어 올 수 있도록 함.
+                    .antMatchers("/user").hasRole("USER")
+                    .antMatchers("/admin/pay").hasRole("ADMIN")
+                    .antMatchers("/admin/**").access("hasRole('ADMIN') or hasRole('SYS')") //spEl 사용
+                    .anyRequest().authenticated(); //모든 요청은 인증을 받을 수 있도록 함
 
         //인증 정책 설정
         //로그인 인증정책
         http
-                .formLogin();
+                .formLogin()
+                .successHandler(new AuthenticationSuccessHandler() {
+                    @Override
+                    public void onAuthenticationSuccess(final HttpServletRequest request, final HttpServletResponse response, final Authentication authentication) throws IOException, ServletException {
+                        RequestCache requestCache = new HttpSessionRequestCache(); // filter에서 사용자가 원래 가고자 했던 요청 정보를 꺼내기 위해서
+                        SavedRequest savedRequest = requestCache.getRequest(request, response); //사용자가 원래 가고자했던 request 정보
+                        String redirectUrl = savedRequest.getRedirectUrl();
+                        response.sendRedirect(redirectUrl); //인증에 성공하면 세션에 저장되어있던 이전의 요청정보로 이동하도록 설정한 것
+                    }
+                });
 //                .loginPage("/loginPage") // login 하도록 하는 page로 이동 하는 url
 //                .defaultSuccessUrl("/")
 //                .failureUrl("/login") // url 을 매핑해줌
@@ -109,6 +126,24 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 //                .maximumSessions(1) //최대 허용 가능 세션 수
 //                .maxSessionsPreventsLogin(true) //default 값은 false. true : 동시 로그인을 차단한다. 즉, 후에 로그인하는 것을 막음 / false : 기존 세션을 만료시킴
 //        ;
+
+        // 인증/인가 API
+
+        http
+                .exceptionHandling()
+                .authenticationEntryPoint(new AuthenticationEntryPoint() {
+                    @Override
+                    public void commence(final HttpServletRequest request, final HttpServletResponse response, final AuthenticationException authException) throws IOException, ServletException {
+                        response.sendRedirect("/login");
+                    }
+                }) // 인증 실패 시 처리
+                .accessDeniedHandler(new AccessDeniedHandler() {
+                    @Override
+                    public void handle(final HttpServletRequest request, final HttpServletResponse response, final AccessDeniedException accessDeniedException) throws IOException, ServletException {
+                        response.sendRedirect("/denied");
+                    }
+                }) // 인가 실패 시 처리
+                ;
 
     }
 
